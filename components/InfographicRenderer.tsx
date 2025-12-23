@@ -44,6 +44,79 @@ const EditableText = ({
   );
 };
 
+// Data Editor for Charts
+const ChartDataEditor: React.FC<{
+  data: Section['data'];
+  onUpdate: (newData: Section['data']) => void;
+}> = ({ data, onUpdate }) => {
+  const handleChange = (index: number, field: 'name' | 'value', val: string) => {
+    const newData = [...data];
+    if (field === 'value') {
+       const num = parseFloat(val.replace(/,/g, ''));
+       newData[index] = { ...newData[index], value: isNaN(num) ? 0 : num };
+    } else {
+       newData[index] = { ...newData[index], name: val };
+    }
+    onUpdate(newData);
+  };
+
+  const handleDelete = (index: number) => {
+     const newData = data.filter((_, i) => i !== index);
+     onUpdate(newData);
+  };
+
+  const handleAdd = () => {
+    onUpdate([...data, { name: 'ข้อมูลใหม่', value: 10 }]);
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="grid grid-cols-12 gap-2 mb-2 text-xs font-bold text-slate-400 uppercase">
+        <div className="col-span-6">ชื่อข้อมูล</div>
+        <div className="col-span-4 text-right">ค่า</div>
+        <div className="col-span-2"></div>
+      </div>
+      <div className="space-y-2">
+        {data.map((item, idx) => (
+          <div key={idx} className="grid grid-cols-12 gap-2 items-center group">
+             <div className="col-span-6">
+                <EditableText
+                   className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-sm text-slate-700 min-h-[28px] block"
+                   value={item.name}
+                   onSave={(v) => handleChange(idx, 'name', v)}
+                />
+             </div>
+             <div className="col-span-4">
+                <EditableText
+                   className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-sm text-slate-700 text-right min-h-[28px] block"
+                   value={item.value}
+                   onSave={(v) => handleChange(idx, 'value', v)}
+                />
+             </div>
+             <div className="col-span-2 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => handleDelete(idx)}
+                  className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
+                  title="ลบรายการ"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
+             </div>
+          </div>
+        ))}
+      </div>
+      <button 
+        onClick={handleAdd}
+        className="mt-3 w-full py-2 flex items-center justify-center text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-dashed border-indigo-200"
+      >
+        + เพิ่มรายการข้อมูล
+      </button>
+    </div>
+  );
+};
+
 // Sub-components for specific chart types that support editing
 const StatCard: React.FC<{ 
   section: Section; 
@@ -68,27 +141,9 @@ const StatCard: React.FC<{
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
       {section.data.map((item, idx) => (
         <div key={idx} className="p-6 rounded-xl bg-white shadow-sm border border-slate-100 flex flex-col items-center text-center hover:shadow-md transition-shadow">
-          <EditableText 
-            tagName="span"
-            className="text-4xl font-bold mb-2 block" 
-            value={item.value.toLocaleString()} 
-            onSave={(val) => handleItemUpdate(idx, 'value', val)}
-            // Pass theme color via style to wrapper or here? Style prop on EditableText not exposed in simple version
-            // We use style attribute on the wrapper usually, but here we want text color.
-            // Let's assume standard color for now or apply themeColor style in parent
-          />
-          {/* Apply theme color to the value manually via style on parent if needed, 
-              but EditableText overrides classes. We can wrap it. 
-           */}
-           <style>{`.text-theme-${section.id}-${idx} { color: ${themeColor} }`}</style>
-           <div className={`text-4xl font-bold mb-2 text-theme-${section.id}-${idx}`}>
-              {/* Overlay for editing is tricky with colored text, keep it simple */}
-           </div>
-           
-           {/* Let's redo EditableText to be simpler for stats */}
-           <div className="text-4xl font-bold mb-2" style={{ color: themeColor }}>
+          <div className="text-4xl font-bold mb-2" style={{ color: themeColor }}>
               <EditableText value={item.value.toLocaleString()} onSave={(val) => handleItemUpdate(idx, 'value', val)} />
-           </div>
+          </div>
 
           <EditableText 
             tagName="span"
@@ -153,7 +208,7 @@ const ListSection: React.FC<{
 };
 
 export const InfographicRenderer: React.FC<Props> = ({ data, onUpdate }) => {
-  const { title, subtitle, sections, themeColor, backgroundColor, footer } = data;
+  const { title, subtitle, sections, themeColor, backgroundColor, footer, sources } = data;
 
   // Helper to update root properties
   const updateRoot = (field: keyof InfographicData, val: string) => {
@@ -208,68 +263,99 @@ export const InfographicRenderer: React.FC<Props> = ({ data, onUpdate }) => {
   };
 
   const renderSectionContent = (section: Section, index: number) => {
+    const commonChartProps = {
+       width: "100%",
+       height: "100%",
+    };
+
+    let chartContent = null;
+    let supportsDataEditor = true;
+
     switch (section.type) {
       case ChartType.BAR:
-        return (
-          <div className="h-64 w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={section.data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
-                />
-                <Bar dataKey="value" fill={themeColor} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        chartContent = (
+          <ResponsiveContainer {...commonChartProps}>
+            <BarChart data={section.data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip 
+                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+              />
+              <Bar dataKey="value" fill={themeColor} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         );
+        break;
       case ChartType.PIE:
-        return (
-          <div className="h-64 w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={section.data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {section.data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        chartContent = (
+          <ResponsiveContainer {...commonChartProps}>
+            <PieChart>
+              <Pie
+                data={section.data}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {section.data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
         );
+        break;
       case ChartType.LINE:
-        return (
-          <div className="h-64 w-full mt-4">
-             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={section.data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="value" stroke={themeColor} strokeWidth={3} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        chartContent = (
+          <ResponsiveContainer {...commonChartProps}>
+            <LineChart data={section.data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke={themeColor} strokeWidth={3} dot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
         );
+        break;
       case ChartType.STAT:
-        return <StatCard section={section} themeColor={themeColor} onUpdateSection={(s) => updateSection(index, s)} />;
+        supportsDataEditor = false;
+        chartContent = <StatCard section={section} themeColor={themeColor} onUpdateSection={(s) => updateSection(index, s)} />;
+        break;
       case ChartType.LIST:
-        return <ListSection section={section} themeColor={themeColor} onUpdateSection={(s) => updateSection(index, s)} />;
+        supportsDataEditor = false;
+        chartContent = <ListSection section={section} themeColor={themeColor} onUpdateSection={(s) => updateSection(index, s)} />;
+        break;
       default:
         return null;
     }
+
+    return (
+      <div className="h-full flex flex-col">
+         <div className={supportsDataEditor ? "h-64 w-full" : "w-full"}>
+           {chartContent}
+         </div>
+         {onUpdate && supportsDataEditor && (
+           <details className="mt-4 group/details">
+              <summary className="text-xs font-medium text-slate-400 cursor-pointer list-none flex items-center gap-1 hover:text-indigo-600 transition-colors">
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform group-open/details:rotate-90" viewBox="0 0 20 20" fill="currentColor">
+                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                 </svg>
+                 แก้ไขข้อมูลกราฟ
+              </summary>
+              <ChartDataEditor 
+                 data={section.data} 
+                 onUpdate={(newData) => updateSection(index, { ...section, data: newData })}
+              />
+           </details>
+         )}
+      </div>
+    );
   };
 
   return (
@@ -309,13 +395,25 @@ export const InfographicRenderer: React.FC<Props> = ({ data, onUpdate }) => {
             >
               {/* Type Switcher - Only visible on hover when editable */}
               {onUpdate && (
-                <button 
-                  onClick={() => cycleChartType(index)}
-                  className="absolute top-0 right-0 p-1 text-xs bg-slate-100 text-slate-500 rounded opacity-0 group-hover/section:opacity-100 hover:bg-slate-200 transition-all z-10"
-                  title="คลิกเพื่อเปลี่ยนประเภทกราฟ"
-                >
-                  {section.type}
-                </button>
+                <div className="absolute top-0 right-0 z-10 flex gap-2 opacity-0 group-hover/section:opacity-100 transition-opacity">
+                   <button 
+                    onClick={() => {
+                        const newSections = sections.filter((_, i) => i !== index);
+                        if(onUpdate) onUpdate({ ...data, sections: newSections });
+                    }}
+                    className="p-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                    title="ลบส่วนนี้"
+                   >
+                     ลบ
+                   </button>
+                   <button 
+                    onClick={() => cycleChartType(index)}
+                    className="p-1 text-xs bg-slate-100 text-slate-500 rounded hover:bg-slate-200"
+                    title="เปลี่ยนประเภทกราฟ"
+                   >
+                    {section.type}
+                   </button>
+                </div>
               )}
 
               <div className="mb-6">
@@ -360,7 +458,7 @@ export const InfographicRenderer: React.FC<Props> = ({ data, onUpdate }) => {
         {onUpdate && (
           <div 
             onClick={handleAddSection}
-            className="break-inside-avoid flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-slate-300 rounded-2xl hover:border-indigo-400 hover:bg-indigo-50 transition-all cursor-pointer group no-print"
+            className="break-inside-avoid flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-slate-300 rounded-2xl hover:border-indigo-400 hover:bg-indigo-50 transition-all cursor-pointer group no-print lg:col-span-2"
           >
             <div className="h-16 w-16 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-4 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400 group-hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -372,8 +470,26 @@ export const InfographicRenderer: React.FC<Props> = ({ data, onUpdate }) => {
         )}
       </div>
 
+      {/* Sources (if available) */}
+      {sources && sources.length > 0 && (
+        <div className="px-12 pb-4 text-xs text-slate-400 text-left shrink-0">
+          <span className="font-bold mr-2">แหล่งข้อมูล:</span>
+          {sources.map((source, idx) => (
+            <a 
+              key={idx} 
+              href={source.uri} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="mr-3 hover:text-indigo-500 underline decoration-slate-300"
+            >
+              {source.title}
+            </a>
+          ))}
+        </div>
+      )}
+
       {/* Footer */}
-      <footer className="p-8 mt-8 bg-slate-900 text-slate-400 text-center text-sm shrink-0">
+      <footer className="p-8 mt-2 bg-slate-900 text-slate-400 text-center text-sm shrink-0">
         <EditableText 
           tagName="p"
           value={footer || `Generated by AG-Infographic • ${new Date().getFullYear()}`}

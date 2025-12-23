@@ -25,6 +25,11 @@ export interface Section {
   };
 }
 
+export interface Source {
+  title: string;
+  uri: string;
+}
+
 export interface InfographicData {
   title: string;
   subtitle: string;
@@ -32,6 +37,7 @@ export interface InfographicData {
   backgroundColor: string;
   sections: Section[];
   footer?: string;
+  sources?: Source[];
 }
 
 export interface Template {

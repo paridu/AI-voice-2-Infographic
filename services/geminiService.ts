@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { InfographicData, ChartType } from '../types';
+import { InfographicData, ChartType, Source } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -53,12 +53,14 @@ export const generateInfographicData = async (prompt: string): Promise<Infograph
       
       Guidelines:
       1. **LANGUAGE**: The content (titles, descriptions, labels) MUST be in **Thai (ภาษาไทย)** unless the user explicitly requests another language.
-      2. Create realistic, interesting data if the user doesn't provide specific numbers.
-      3. Choose the best chart type (BAR, PIE, LINE, STAT, LIST) for the data.
-      4. Use a modern, professional color palette in themeColor.
-      5. Ensure at least 3 distinct sections unless the user asks for less.
+      2. **REAL DATA**: If the user asks for factual information, comparisons, or news, USE GOOGLE SEARCH to get accurate numbers and statistics.
+      3. Create realistic, interesting data if the user doesn't provide specific numbers.
+      4. Choose the best chart type (BAR, PIE, LINE, STAT, LIST) for the data.
+      5. Use a modern, professional color palette in themeColor.
+      6. Ensure at least 3 distinct sections unless the user asks for less.
       `,
       config: {
+        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: INFOGRAPHIC_SCHEMA,
         thinkingConfig: { thinkingBudget: 0 } // Disable thinking for speed on this task
@@ -68,7 +70,26 @@ export const generateInfographicData = async (prompt: string): Promise<Infograph
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     
-    return JSON.parse(text) as InfographicData;
+    const data = JSON.parse(text) as InfographicData;
+
+    // Extract grounding sources
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (groundingChunks) {
+      // Explicitly type and map to avoid unknown type errors
+      const sources: Source[] = groundingChunks
+        .map((chunk: any) => chunk.web)
+        .filter((web: any) => web && web.uri && web.title)
+        .map((web: any) => ({ title: web.title, uri: web.uri }));
+      
+      // Remove duplicates
+      const uniqueSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
+      
+      if (uniqueSources.length > 0) {
+        data.sources = uniqueSources;
+      }
+    }
+
+    return data;
   } catch (error) {
     console.error("Error generating infographic:", error);
     throw error;
@@ -103,7 +124,13 @@ export const optimizeInfographicContent = async (data: InfographicData): Promise
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     
-    return JSON.parse(text) as InfographicData;
+    // Preserve sources if they exist in original data, as optimization prompt might lose them (or we need to merge them back)
+    const optimizedData = JSON.parse(text) as InfographicData;
+    if (data.sources) {
+      optimizedData.sources = data.sources;
+    }
+    
+    return optimizedData;
   } catch (error) {
     console.error("Error optimizing infographic:", error);
     throw error;
