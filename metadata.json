@@ -1,0 +1,7 @@
+{
+  "name": "AI voice 2 Infographic",
+  "description": "AI-Powered Infographic Generator with Voice Control",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
